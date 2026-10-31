@@ -24,14 +24,46 @@ st.html("""
 <style>
     [data-testid="stSidebar"] {border-right: 1px solid #dce4f0;}
     [data-testid="stSidebar"] [data-testid="stButton"] button {
-        justify-content: flex-start; border-radius: 9px; min-height: 44px;
+        justify-content: flex-start !important; text-align: left !important;
+        gap: 12px; border-radius: 9px; min-height: 44px;
         padding: 10px 14px; margin-bottom: 3px;
+    }
+    [data-testid="stSidebar"] [data-testid="stButton"] button > div {
+        justify-content: flex-start !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stButton"] button [data-testid="stMarkdownContainer"] {
+        flex: 1; text-align: left !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stButton"] button p {
+        text-align: left !important;
     }
     [data-testid="stSidebar"] button[kind="primary"] {
         background: #3d6df2; border-color: #3d6df2; color: white;
     }
     [data-testid="stSidebar"] button[kind="primary"]:hover {background: #2c58ce;}
-    [data-testid="stMetric"] {padding: 12px 0;}
+    [data-testid="stMetric"] {padding: 18px 20px; border-radius: 12px;}
+    .st-key-metric_students [data-testid="stMetric"] {
+        background: #EDF3FF; border: 1px solid #CDDDFB; border-top: 4px solid #4776E6;
+        color: #234A9F;
+    }
+    .st-key-metric_score [data-testid="stMetric"] {
+        background: #F3EEFC; border: 1px solid #E1D5F5; border-top: 4px solid #9570D8;
+        color: #64429A;
+    }
+    .st-key-metric_attendance [data-testid="stMetric"] {
+        background: #EAF7F5; border: 1px solid #C6E8E3; border-top: 4px solid #23A5A0;
+        color: #146D67;
+    }
+    .st-key-metric_risk [data-testid="stMetric"] {
+        background: #FDEEF1; border: 1px solid #F3CCD5; border-top: 4px solid #DC4C64;
+        color: #A82440;
+    }
+    .st-key-metric_low_score [data-testid="stMetric"] {
+        background: #FFF5E3; border: 1px solid #F1DCAF; border-top: 4px solid #CF850D;
+        color: #855100;
+    }
+    [class*="st-key-metric_"] [data-testid="stMetricLabel"],
+    [class*="st-key-metric_"] [data-testid="stMetricValue"] {color: inherit;}
     .risk-card {padding: 15px 18px; border-radius: 12px; margin: 8px 0 20px;
         border: 1px solid currentColor; border-left-width: 5px;}
     .risk-card .risk-count {font-size: 26px; font-weight: 750; margin-top: 3px;}
@@ -184,16 +216,20 @@ elif selected_page == "Dashboard":
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("Students", total_students)
+        with st.container(key="metric_students"):
+            st.metric("Students", total_students, border=True)
 
     with col2:
-        st.metric("Average Score", round(average_score, 2))
+        with st.container(key="metric_score"):
+            st.metric("Average Score", round(average_score, 2), border=True)
 
     with col3:
-        st.metric("Average Attendance", f"{round(average_attendance, 2)}%")
+        with st.container(key="metric_attendance"):
+            st.metric("Average Attendance", f"{round(average_attendance, 2)}%", border=True)
 
     with col4:
-        st.metric("High Risk", high_risk_students)
+        with st.container(key="metric_risk"):
+            st.metric("High Risk", high_risk_students, border=True)
 
     show_data = st.checkbox("Show Filtered Dataset", True)
 
@@ -288,27 +324,37 @@ elif selected_page == "Student Data":
         student_df["Risk Level"] == "High Risk"
     ].shape[0]
 
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("Total Students", total_students)
-
-    with col2:
-        st.metric("Average Score", round(average_score, 2))
-
-    with col3:
-        st.metric("Average Attendance", f"{round(average_attendance, 2)}%")
-
-    with col4:
-        st.metric("High Risk Students", high_risk_students)
-
-    st.metric("Low Score Students", int((student_df["Score"] < 60).sum()))
+    st.subheader("Student Summary")
+    summary_metrics = [
+        ("Total Students", total_students, "metric_students"),
+        ("Average Score", f"{average_score:.2f}", "metric_score"),
+        ("Average Attendance", f"{average_attendance:.1f}%", "metric_attendance"),
+        ("High Risk Students", high_risk_students, "metric_risk"),
+        ("Low Score Students", int((student_df["Score"] < 60).sum()), "metric_low_score"),
+    ]
+    for column, (label, value, card_key) in zip(st.columns(5), summary_metrics):
+        with column:
+            with st.container(key=card_key):
+                st.metric(label, value, border=True)
 
     st.subheader("Data Inspection")
-    st.write("Rows and Columns:", student_df.shape)
-    st.write("Column Names:")
-    st.write(student_df.columns.tolist())
-    st.write("First 5 Rows:")
+    st.caption(f"{student_df.shape[0]} rows · {student_df.shape[1]} columns")
+    column_descriptions = {
+        "Student Name": "Name of the student",
+        "Course": "Course the student is taking",
+        "Score": "Academic score out of 100",
+        "Attendance": "Attendance percentage",
+        "Study Hours": "Recorded study hours",
+        "Risk Level": "Calculated Low, Medium, or High Risk classification",
+    }
+    inspection_df = pd.DataFrame({
+        "Column": student_df.columns.tolist(),
+        "Description": [column_descriptions.get(name, "Student data field")
+                        for name in student_df.columns],
+    })
+    st.dataframe(inspection_df, hide_index=True, width="stretch")
+
+    st.subheader("First 5 Rows")
     st.dataframe(styled_students(student_df.head()), hide_index=True, width="stretch")
 
     st.subheader("Full Student Dataset")
