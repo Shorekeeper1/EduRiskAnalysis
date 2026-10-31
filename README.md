@@ -4,6 +4,18 @@
 
 EduRisk Analytics
 
+## Visual Update
+
+- The sidebar starts collapsed. Use the menu control at the top left to open it,
+  and the collapse control to close it. Icon buttons replace the radio menu;
+  the current page is highlighted in blue.
+- Low Risk is green, Medium Risk is amber, and High Risk is red throughout
+  summary cards, table cells, student-score bars, risk-count bars, and the donut chart.
+- Course bars have distinct colors. All charts follow the dashboard filters.
+- The Risk Distribution donut includes counts and percentages in its tooltips.
+- Empty filter results show a helpful message instead of empty charts.
+- All combined Lab 01–04 functions remain available, including history and CSV export.
+
 ## Lab 04 Update
 
 This version continues the completed Lab 03 app and retains its dashboard,

@@ -1,12 +1,62 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 
 
 st.set_page_config(
     page_title="EduRisk Analytics - Lab 04",
     page_icon="🎓",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
+
+
+# Use the same risk colors in tables, charts, and summary cards.
+RISK_ORDER = ["Low Risk", "Medium Risk", "High Risk"]
+RISK_COLORS = ["#16865B", "#CF850D", "#DC4C64"]
+RISK_STYLES = {
+    "Low Risk": ("#E4F5EC", "#126440"),
+    "Medium Risk": ("#FFF1D6", "#855100"),
+    "High Risk": ("#FDE8EC", "#A82440"),
+}
+
+st.html("""
+<style>
+    [data-testid="stSidebar"] {border-right: 1px solid #dce4f0;}
+    [data-testid="stSidebar"] [data-testid="stButton"] button {
+        justify-content: flex-start; border-radius: 9px; min-height: 44px;
+        padding: 10px 14px; margin-bottom: 3px;
+    }
+    [data-testid="stSidebar"] button[kind="primary"] {
+        background: #3d6df2; border-color: #3d6df2; color: white;
+    }
+    [data-testid="stSidebar"] button[kind="primary"]:hover {background: #2c58ce;}
+    [data-testid="stMetric"] {padding: 12px 0;}
+    .risk-card {padding: 15px 18px; border-radius: 12px; margin: 8px 0 20px;
+        border: 1px solid currentColor; border-left-width: 5px;}
+    .risk-card .risk-count {font-size: 26px; font-weight: 750; margin-top: 3px;}
+    .risk-label {font-size: 14px; font-weight: 650;}
+</style>
+""")
+
+
+def styled_students(data):
+    def risk_cell(value):
+        background, foreground = RISK_STYLES.get(value, ("transparent", "inherit"))
+        return f"background-color: {background}; color: {foreground}; font-weight: 700"
+
+    return data.style.map(risk_cell, subset=["Risk Level"])
+
+
+def risk_color():
+    return alt.Color("Risk Level:N", sort=RISK_ORDER,
+                     scale=alt.Scale(domain=RISK_ORDER, range=RISK_COLORS),
+                     legend=alt.Legend(title=None, orient="bottom"))
+
+
+def select_page(page):
+    st.session_state["selected_page"] = page
+
 
 def load_student_data():
     try:
@@ -36,12 +86,27 @@ student_df["Risk Level"] = student_df.apply(
 if "risk_history" not in st.session_state:
     st.session_state["risk_history"] = []
 
+if "selected_page" not in st.session_state:
+    st.session_state["selected_page"] = "Home"
+
 with st.sidebar:
-    st.title("EduRisk Menu")
-    selected_page = st.radio(
-        "Select Page",
-        ["Home", "Dashboard", "Student Data", "Risk Checker", "About"]
-    )
+    st.title("🎓 EduRisk")
+    st.caption("STUDENT SUPPORT · LABS 01–04")
+    st.divider()
+    for page, icon in [
+        ("Home", ":material/home:"),
+        ("Dashboard", ":material/dashboard:"),
+        ("Student Data", ":material/table_chart:"),
+        ("Risk Checker", ":material/health_and_safety:"),
+        ("About", ":material/info:"),
+    ]:
+        st.button(page, icon=icon, key=f"nav_{page}", width="stretch",
+                  type="primary" if st.session_state["selected_page"] == page else "tertiary",
+                  on_click=select_page, args=(page,))
+    st.divider()
+    st.caption("Support learning. Encourage progress.")
+
+selected_page = st.session_state["selected_page"]
 
 if selected_page == "Home":
     st.title("🎓 EduRisk Analytics")
@@ -135,7 +200,7 @@ elif selected_page == "Dashboard":
     if show_data:
         st.subheader("Student Records")
         st.caption("Filtered student data loaded from students.csv.")
-        st.dataframe(filtered_df)
+        st.dataframe(styled_students(filtered_df), hide_index=True, width="stretch")
 
         csv = filtered_df.to_csv(index=False)
 
@@ -148,34 +213,65 @@ elif selected_page == "Dashboard":
     else:
         st.info("Filtered dataset is hidden.")
 
+    risk_counts = filtered_df["Risk Level"].value_counts().reindex(RISK_ORDER, fill_value=0)
+    for column, level in zip(st.columns(3), RISK_ORDER):
+        background, foreground = RISK_STYLES[level]
+        with column:
+            st.markdown(
+                f'<div class="risk-card" style="background:{background};color:{foreground}">'
+                f'<div class="risk-label">{level}</div>'
+                f'<div class="risk-count">{int(risk_counts[level])}</div></div>',
+                unsafe_allow_html=True,
+            )
+
     st.subheader("Charts")
-
-    chart_col1, chart_col2 = st.columns(2)
-
-    with chart_col1:
-        st.write("Student Scores")
-
-        if len(filtered_df) > 0:
-            score_chart = filtered_df.set_index("Student Name")["Score"]
-            st.bar_chart(score_chart)
-        else:
-            st.warning("No data available for score chart.")
-
-    with chart_col2:
-        st.write("Risk Level Count")
-
-        if len(filtered_df) > 0:
-            risk_count = filtered_df["Risk Level"].value_counts()
-            st.bar_chart(risk_count)
-        else:
-            st.warning("No data available for risk chart.")
-
-    st.subheader("Course Count")
-    if len(filtered_df) > 0:
-        course_count = filtered_df["Course"].value_counts()
-        st.bar_chart(course_count)
+    if filtered_df.empty:
+        st.info("No students match these filters. Adjust the filters to see charts.")
     else:
-        st.warning("No data available for course chart.")
+        risk_data = risk_counts.rename_axis("Risk Level").reset_index(name="Students")
+        chart_col1, chart_col2 = st.columns(2)
+        with chart_col1:
+            st.write("Student Scores")
+            chart = alt.Chart(filtered_df).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                x=alt.X("Student Name:N", sort=None, axis=alt.Axis(labelAngle=-35)),
+                y=alt.Y("Score:Q", scale=alt.Scale(domain=[0, 100])),
+                color=risk_color(),
+                tooltip=["Student Name:N", "Course:N", "Score:Q", "Attendance:Q", "Risk Level:N"],
+            ).properties(height=280)
+            st.altair_chart(chart, width="stretch")
+        with chart_col2:
+            st.write("Risk Level Count")
+            chart = alt.Chart(risk_data).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                x=alt.X("Risk Level:N", sort=RISK_ORDER, axis=alt.Axis(labelAngle=0)),
+                y=alt.Y("Students:Q", axis=alt.Axis(tickMinStep=1)),
+                color=risk_color(), tooltip=["Risk Level:N", "Students:Q"],
+            ).properties(height=280)
+            st.altair_chart(chart, width="stretch")
+
+        chart_col3, chart_col4 = st.columns(2)
+        with chart_col3:
+            st.write("Course Count")
+            course_data = filtered_df["Course"].value_counts().rename_axis("Course").reset_index(name="Students")
+            chart = alt.Chart(course_data).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                x=alt.X("Course:N", sort="-y", axis=alt.Axis(labelAngle=-25)),
+                y=alt.Y("Students:Q", axis=alt.Axis(tickMinStep=1)),
+                color=alt.Color("Course:N", scale=alt.Scale(
+                    domain=["Python", "Statistics", "Database", "Web App"],
+                    range=["#4776E6", "#9570D8", "#23A5A0", "#E39848"]), legend=None),
+                tooltip=["Course:N", "Students:Q"],
+            ).properties(height=280)
+            st.altair_chart(chart, width="stretch")
+        with chart_col4:
+            st.write("Risk Distribution")
+            pie_data = risk_data[risk_data["Students"] > 0].copy()
+            pie_data["Share"] = pie_data["Students"] / len(filtered_df)
+            donut = alt.Chart(pie_data).mark_arc(innerRadius=65, cornerRadius=4).encode(
+                theta=alt.Theta("Students:Q", stack=True), color=risk_color(),
+                order=alt.Order("Risk Level:N", sort="ascending"),
+                tooltip=["Risk Level:N", "Students:Q", alt.Tooltip("Share:Q", format=".0%")],
+            ).properties(height=280)
+            st.altair_chart(donut, width="stretch")
+            st.caption("Share of students matching the current filters.")
 
     st.info(
         "Ethics Reminder: Academic monitoring should support students, "
@@ -213,10 +309,10 @@ elif selected_page == "Student Data":
     st.write("Column Names:")
     st.write(student_df.columns.tolist())
     st.write("First 5 Rows:")
-    st.dataframe(student_df.head())
+    st.dataframe(styled_students(student_df.head()), hide_index=True, width="stretch")
 
     st.subheader("Full Student Dataset")
-    st.dataframe(student_df)
+    st.dataframe(styled_students(student_df), hide_index=True, width="stretch")
 
 elif selected_page == "Risk Checker":
     st.title("Single Student Risk Checker")
@@ -279,7 +375,7 @@ elif selected_page == "Risk Checker":
 
     if st.session_state["risk_history"]:
         history_df = pd.DataFrame(st.session_state["risk_history"])
-        st.dataframe(history_df)
+        st.dataframe(styled_students(history_df), hide_index=True, width="stretch")
     else:
         st.info("No risk checks yet.")
 
