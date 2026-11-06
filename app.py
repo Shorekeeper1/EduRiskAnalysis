@@ -1,9 +1,12 @@
+# Libraries: Streamlit builds the interface, Pandas handles tables,
+# and Altair and Plotly create charts.
 import streamlit as st
 import pandas as pd
 import altair as alt
 import plotly.express as px
 
 
+# PAGE SETUP: use a wide layout and keep the drawer closed initially.
 st.set_page_config(
     page_title="EduRisk Analytics - Lab 05",
     page_icon="🎓",
@@ -21,6 +24,8 @@ RISK_STYLES = {
     "High Risk": ("#FDE8EC", "#A82440"),
 }
 
+# CUSTOM APPEARANCE: style sidebar buttons, metric boxes, and risk cards.
+# The st-key-* selectors match the keys assigned to the metric containers.
 st.html("""
 <style>
     [data-testid="stSidebar"] {border-right: 1px solid #dce4f0;}
@@ -73,7 +78,10 @@ st.html("""
 """)
 
 
+# Return a styled table that highlights only the Risk Level cells.
+# The underlying data remains unchanged, so CSV downloads contain plain values.
 def styled_students(data):
+    # Convert one risk label into background, text-color, and font-weight rules.
     def risk_cell(value):
         background, foreground = RISK_STYLES.get(value, ("transparent", "inherit"))
         return f"background-color: {background}; color: {foreground}; font-weight: 700"
@@ -81,16 +89,21 @@ def styled_students(data):
     return data.style.map(risk_cell, subset=["Risk Level"])
 
 
+# Build a reusable Altair color encoding with a fixed risk order and palette.
+# Fixed colors keep High Risk red even when filters remove other categories.
 def risk_color():
     return alt.Color("Risk Level:N", sort=RISK_ORDER,
                      scale=alt.Scale(domain=RISK_ORDER, range=RISK_COLORS),
                      legend=alt.Legend(title=None, orient="bottom"))
 
 
+# Sidebar button callback: remember the selected page before Streamlit reruns.
 def select_page(page):
     st.session_state["selected_page"] = page
 
 
+# Load students.csv from the current project folder.
+# Show a helpful error and stop rendering if the file is missing.
 def load_student_data():
     try:
         return pd.read_csv("students.csv")
@@ -101,8 +114,11 @@ def load_student_data():
         st.stop()
 
 
+# Load the full dataset once during this script run; dashboard filters use a copy.
 student_df = load_student_data()
 
+# Classify a student using score OR attendance.
+# Below 60 is High Risk; otherwise below 75 is Medium Risk; both >= 75 is Low Risk.
 def get_risk_level(score, attendance):
     if score < 60 or attendance < 60:
         return "High Risk"
@@ -111,17 +127,22 @@ def get_risk_level(score, attendance):
     else:
         return "Low Risk"
 
+# Calculate Risk Level for every row. axis=1 passes one student row at a time.
 student_df["Risk Level"] = student_df.apply(
     lambda row: get_risk_level(row["Score"], row["Attendance"]),
     axis=1
 )
 
+# SESSION MEMORY: initialize only when absent so reruns do not erase history.
+# History is temporary for this session and is never written to students.csv.
 if "risk_history" not in st.session_state:
     st.session_state["risk_history"] = []
 
+# Start new sessions on Home and retain the selected page across reruns.
 if "selected_page" not in st.session_state:
     st.session_state["selected_page"] = "Home"
 
+# DRAWER NAVIGATION: icon buttons replace radio buttons; the active page is blue.
 with st.sidebar:
     st.title("🎓 EduRisk")
     st.caption("STUDENT SUPPORT · LABS 01–05")
@@ -141,6 +162,7 @@ with st.sidebar:
 
 selected_page = st.session_state["selected_page"]
 
+# HOME PAGE: introduce Lab 05 and retain the original Lab 01 welcome button.
 if selected_page == "Home":
     st.title("🎓 EduRisk Analytics")
     st.subheader("Interactive Dashboard with Visualization and Filters")
@@ -154,11 +176,13 @@ if selected_page == "Home":
     if st.button("Click Me"):
         st.write("Welcome")
 
+# DASHBOARD PAGE: every metric, summary, chart, and export uses filtered_df.
 elif selected_page == "Dashboard":
     st.title("Interactive Student Performance Dashboard")
 
     st.write("Use the filters below to explore student performance loaded from students.csv.")
 
+    # Collect course, risk, minimum-attendance, and minimum-score selections.
     st.subheader("Dashboard Filters")
     filter_columns = st.columns(4)
     with filter_columns[0]:
@@ -170,6 +194,7 @@ elif selected_page == "Dashboard":
     with filter_columns[3]:
         min_score = st.slider("Minimum Score", 0, 100, 0)
 
+    # Apply all selected filters in sequence without modifying the full dataset.
     filtered_df = student_df.copy()
 
     if selected_course != "All":
@@ -186,9 +211,11 @@ elif selected_page == "Dashboard":
         filtered_df["Score"] >= min_score
     ]
 
+    # An empty selection is valid: warn the user instead of failing.
     if filtered_df.empty:
         st.warning("No students match the selected filters. Please adjust the filters.")
 
+    # Count matching students and use zero averages when there are no matches.
     total_students = len(filtered_df)
 
     if len(filtered_df) > 0:
@@ -202,6 +229,7 @@ elif selected_page == "Dashboard":
         filtered_df["Risk Level"] == "High Risk"
     ].shape[0]
 
+    # Display the filtered metrics in four colored, bordered containers.
     st.subheader("Filtered Dashboard Metrics")
 
     col1, col2, col3, col4 = st.columns(4)
@@ -222,6 +250,7 @@ elif selected_page == "Dashboard":
         with st.container(key="metric_risk"):
             st.metric("High Risk", high_risk_students, border=True)
 
+    # groupby collects students by course; agg computes each summary statistic.
     st.subheader("Course Summary")
     if not filtered_df.empty:
         course_summary = filtered_df.groupby("Course").agg(
@@ -234,6 +263,7 @@ elif selected_page == "Dashboard":
     else:
         st.info("No course summary available for the selected filters.")
 
+    # value_counts counts records in each risk category present in the selection.
     st.subheader("Risk Level Summary")
     if not filtered_df.empty:
         risk_summary = filtered_df["Risk Level"].value_counts().rename_axis("Risk Level").reset_index(name="Students")
@@ -241,6 +271,7 @@ elif selected_page == "Dashboard":
     else:
         st.info("No risk summary available for the selected filters.")
 
+    # Let users show/hide matching records and download those records as CSV.
     show_data = st.checkbox("Show Filtered Dataset", True)
 
     if show_data:
@@ -259,6 +290,7 @@ elif selected_page == "Dashboard":
     else:
         st.info("Filtered dataset is hidden.")
 
+    # Reindex keeps all three risk cards visible, including categories with zero students.
     risk_counts = filtered_df["Risk Level"].value_counts().reindex(RISK_ORDER, fill_value=0)
     for column, level in zip(st.columns(3), RISK_ORDER):
         background, foreground = RISK_STYLES[level]
@@ -270,6 +302,7 @@ elif selected_page == "Dashboard":
                 unsafe_allow_html=True,
             )
 
+    # Built-in bar charts: student scores use risk colors; course bars show counts.
     st.subheader("Streamlit Charts")
     simple_columns = st.columns(2)
     with simple_columns[0]:
@@ -288,6 +321,7 @@ elif selected_page == "Dashboard":
         else:
             st.info("No course count chart available.")
 
+    # Plotly adds hover details and interactive controls. Skip charts for empty data.
     st.subheader("Interactive Plotly Charts")
     plotly_columns = st.columns(2)
     colors = dict(zip(RISK_ORDER, RISK_COLORS))
@@ -311,6 +345,7 @@ elif selected_page == "Dashboard":
         else:
             st.info("No score chart available.")
 
+    # Preserve earlier Altair charts in a collapsible section to keep the dashboard tidy.
     with st.expander("Additional Charts · Course colors and risk doughnut"):
         if filtered_df.empty:
             st.info("No students match these filters. Adjust the filters to see charts.")
@@ -351,6 +386,7 @@ elif selected_page == "Dashboard":
             with chart_col4:
                 st.write("Risk Distribution")
                 pie_data = risk_data[risk_data["Students"] > 0].copy()
+                # Divide category counts by the filtered total to show percentage tooltips.
                 pie_data["Share"] = pie_data["Students"] / len(filtered_df)
                 donut = alt.Chart(pie_data).mark_arc(innerRadius=65, cornerRadius=4).encode(
                     theta=alt.Theta("Students:Q", stack=True), color=risk_color(),
@@ -365,6 +401,7 @@ elif selected_page == "Dashboard":
         "not label or punish them."
     )
 
+# STUDENT DATA PAGE: show the full dataset, independent of Dashboard filters.
 elif selected_page == "Student Data":
     st.title("Student Data")
 
@@ -375,6 +412,7 @@ elif selected_page == "Student Data":
         student_df["Risk Level"] == "High Risk"
     ].shape[0]
 
+    # Each tuple supplies the label, value, and styling key for one summary card.
     st.subheader("Student Summary")
     summary_metrics = [
         ("Total Students", total_students, "metric_students"),
@@ -388,6 +426,7 @@ elif selected_page == "Student Data":
             with st.container(key=card_key):
                 st.metric(label, value, border=True)
 
+    # Explain dataset dimensions and columns, then show a preview and the full table.
     st.subheader("Data Inspection")
     st.caption(f"{student_df.shape[0]} rows · {student_df.shape[1]} columns")
     column_descriptions = {
@@ -411,6 +450,7 @@ elif selected_page == "Student Data":
     st.subheader("Full Student Dataset")
     st.dataframe(styled_students(student_df), hide_index=True, width="stretch")
 
+# RISK CHECKER PAGE: validate one submission and retain valid checks in session memory.
 elif selected_page == "Risk Checker":
     st.title("Single Student Risk Checker")
 
@@ -424,6 +464,8 @@ elif selected_page == "Risk Checker":
         "not label or punish them."
     )
 
+    # A form batches input changes until Check Risk is clicked.
+    # Number-input bounds restrict score and attendance to 0–100.
     with st.form("risk_checker_form"):
         input_name = st.text_input("Student Name")
         input_score = st.number_input("Score", 0, 100, 50)
@@ -431,6 +473,7 @@ elif selected_page == "Risk Checker":
 
         submitted = st.form_submit_button("Check Risk")
 
+    # Process only submitted forms; strip removes whitespace around the name.
     if submitted:
         if input_name.strip() == "":
             st.warning("Please enter the student name.")
@@ -447,6 +490,7 @@ elif selected_page == "Risk Checker":
                 "Risk Level": risk_result
             }
 
+            # Save exactly one valid result per submission, without changing the CSV.
             st.session_state["risk_history"].append(result)
 
             if risk_result == "Low Risk":
@@ -463,6 +507,7 @@ elif selected_page == "Risk Checker":
             st.write("Score:", input_score)
             st.write("Attendance:", input_attendance)
 
+    # Clear memory before rendering the table so it disappears immediately on click.
     st.subheader("Recent Risk Checks")
 
     if st.session_state["risk_history"]:
@@ -470,6 +515,7 @@ elif selected_page == "Risk Checker":
             st.session_state["risk_history"] = []
             st.success("Risk check history cleared.")
 
+    # Convert saved dictionaries into a table; otherwise display the empty-history message.
     if st.session_state["risk_history"]:
         history_df = pd.DataFrame(st.session_state["risk_history"])
         st.dataframe(styled_students(history_df), hide_index=True, width="stretch")
@@ -481,6 +527,7 @@ elif selected_page == "Risk Checker":
         "not as final judgment about a student."
     )
 
+# ABOUT PAGE: describe the current lab and responsible use of student information.
 else:
     st.title("About")
 
