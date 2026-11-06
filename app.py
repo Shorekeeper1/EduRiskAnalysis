@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import plotly.express as px
 
 
 st.set_page_config(
-    page_title="EduRisk Analytics - Lab 04",
+    page_title="EduRisk Analytics - Lab 05",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -123,7 +124,7 @@ if "selected_page" not in st.session_state:
 
 with st.sidebar:
     st.title("🎓 EduRisk")
-    st.caption("STUDENT SUPPORT · LABS 01–04")
+    st.caption("STUDENT SUPPORT · LABS 01–05")
     st.divider()
     for page, icon in [
         ("Home", ":material/home:"),
@@ -142,45 +143,32 @@ selected_page = st.session_state["selected_page"]
 
 if selected_page == "Home":
     st.title("🎓 EduRisk Analytics")
-    st.subheader("Reliable Risk Checker with Forms and Session State")
-    st.write("Welcome to Lab 04.")
+    st.subheader("Interactive Dashboard with Visualization and Filters")
+    st.write("Welcome to Lab 05.")
     st.write(
-        "In this lab, the app improves the Risk Checker page using "
-        "Streamlit forms, input validation, and session state."
+        "In this lab, the app improves the Dashboard page using "
+        "grouped summaries, interactive filters, Streamlit charts, and Plotly charts."
     )
-    st.success("Lab 04 app is running successfully!")
+    st.success("Lab 05 app is running successfully!")
 
     if st.button("Click Me"):
         st.write("Welcome")
 
 elif selected_page == "Dashboard":
-    st.title("Dashboard Prototype")
+    st.title("Interactive Student Performance Dashboard")
 
     st.write("Use the filters below to explore student performance loaded from students.csv.")
 
-    selected_course = st.selectbox(
-        "Select Course",
-        ["All"] + list(student_df["Course"].unique())
-    )
-
-    selected_risk = st.selectbox(
-        "Select Risk Level",
-        ["All", "Low Risk", "Medium Risk", "High Risk"]
-    )
-
-    min_attendance = st.slider(
-        "Minimum Attendance",
-        0,
-        100,
-        0
-    )
-
-    min_score = st.slider(
-        "Minimum Score",
-        0,
-        100,
-        0
-    )
+    st.subheader("Dashboard Filters")
+    filter_columns = st.columns(4)
+    with filter_columns[0]:
+        selected_course = st.selectbox("Filter by Course", ["All"] + sorted(student_df["Course"].unique()))
+    with filter_columns[1]:
+        selected_risk = st.selectbox("Filter by Risk Level", ["All"] + RISK_ORDER)
+    with filter_columns[2]:
+        min_attendance = st.slider("Minimum Attendance", 0, 100, 0)
+    with filter_columns[3]:
+        min_score = st.slider("Minimum Score", 0, 100, 0)
 
     filtered_df = student_df.copy()
 
@@ -198,6 +186,9 @@ elif selected_page == "Dashboard":
         filtered_df["Score"] >= min_score
     ]
 
+    if filtered_df.empty:
+        st.warning("No students match the selected filters. Please adjust the filters.")
+
     total_students = len(filtered_df)
 
     if len(filtered_df) > 0:
@@ -211,7 +202,7 @@ elif selected_page == "Dashboard":
         filtered_df["Risk Level"] == "High Risk"
     ].shape[0]
 
-    st.subheader("Dashboard Metrics")
+    st.subheader("Filtered Dashboard Metrics")
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -231,10 +222,29 @@ elif selected_page == "Dashboard":
         with st.container(key="metric_risk"):
             st.metric("High Risk", high_risk_students, border=True)
 
+    st.subheader("Course Summary")
+    if not filtered_df.empty:
+        course_summary = filtered_df.groupby("Course").agg(
+            Students=("Student Name", "count"),
+            Average_Score=("Score", "mean"),
+            Average_Attendance=("Attendance", "mean"),
+            Average_Study_Hours=("Study Hours", "mean"),
+        ).reset_index()
+        st.dataframe(course_summary.round(2), hide_index=True, width="stretch")
+    else:
+        st.info("No course summary available for the selected filters.")
+
+    st.subheader("Risk Level Summary")
+    if not filtered_df.empty:
+        risk_summary = filtered_df["Risk Level"].value_counts().rename_axis("Risk Level").reset_index(name="Students")
+        st.dataframe(styled_students(risk_summary), hide_index=True, width="stretch")
+    else:
+        st.info("No risk summary available for the selected filters.")
+
     show_data = st.checkbox("Show Filtered Dataset", True)
 
     if show_data:
-        st.subheader("Student Records")
+        st.subheader("Filtered Student Records")
         st.caption("Filtered student data loaded from students.csv.")
         st.dataframe(styled_students(filtered_df), hide_index=True, width="stretch")
 
@@ -260,57 +270,98 @@ elif selected_page == "Dashboard":
                 unsafe_allow_html=True,
             )
 
-    st.subheader("Charts")
-    if filtered_df.empty:
-        st.info("No students match these filters. Adjust the filters to see charts.")
-    else:
-        risk_data = risk_counts.rename_axis("Risk Level").reset_index(name="Students")
-        chart_col1, chart_col2 = st.columns(2)
-        with chart_col1:
-            st.write("Student Scores")
-            chart = alt.Chart(filtered_df).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-                x=alt.X("Student Name:N", sort=None, axis=alt.Axis(labelAngle=-35)),
-                y=alt.Y("Score:Q", scale=alt.Scale(domain=[0, 100])),
-                color=risk_color(),
-                tooltip=["Student Name:N", "Course:N", "Score:Q", "Attendance:Q", "Risk Level:N"],
-            ).properties(height=280)
-            st.altair_chart(chart, width="stretch")
-        with chart_col2:
-            st.write("Risk Level Count")
-            chart = alt.Chart(risk_data).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-                x=alt.X("Risk Level:N", sort=RISK_ORDER, axis=alt.Axis(labelAngle=0)),
-                y=alt.Y("Students:Q", axis=alt.Axis(tickMinStep=1)),
-                color=risk_color(), tooltip=["Risk Level:N", "Students:Q"],
-            ).properties(height=280)
-            st.altair_chart(chart, width="stretch")
+    st.subheader("Streamlit Charts")
+    simple_columns = st.columns(2)
+    with simple_columns[0]:
+        st.write("Student Scores")
+        if not filtered_df.empty:
+            score_chart = filtered_df[["Student Name", "Score", "Risk Level"]].copy()
+            score_chart["Color"] = score_chart["Risk Level"].map(dict(zip(RISK_ORDER, RISK_COLORS)))
+            st.bar_chart(score_chart, x="Student Name", y="Score", color="Color")
+        else:
+            st.info("No score chart available.")
+    with simple_columns[1]:
+        st.write("Students by Course")
+        if not filtered_df.empty:
+            course_count = filtered_df["Course"].value_counts()
+            st.bar_chart(course_count, color="#4776E6")
+        else:
+            st.info("No course count chart available.")
 
-        chart_col3, chart_col4 = st.columns(2)
-        with chart_col3:
-            st.write("Course Count")
-            course_data = filtered_df["Course"].value_counts().rename_axis("Course").reset_index(name="Students")
-            chart = alt.Chart(course_data).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-                x=alt.X("Course:N", sort="-y", axis=alt.Axis(labelAngle=-25)),
-                y=alt.Y("Students:Q", axis=alt.Axis(tickMinStep=1)),
-                color=alt.Color("Course:N", scale=alt.Scale(
-                    domain=["Python", "Statistics", "Database", "Web App"],
-                    range=["#4776E6", "#9570D8", "#23A5A0", "#E39848"]), legend=None),
-                tooltip=["Course:N", "Students:Q"],
-            ).properties(height=280)
-            st.altair_chart(chart, width="stretch")
-        with chart_col4:
-            st.write("Risk Distribution")
-            pie_data = risk_data[risk_data["Students"] > 0].copy()
-            pie_data["Share"] = pie_data["Students"] / len(filtered_df)
-            donut = alt.Chart(pie_data).mark_arc(innerRadius=65, cornerRadius=4).encode(
-                theta=alt.Theta("Students:Q", stack=True), color=risk_color(),
-                order=alt.Order("Risk Level:N", sort="ascending"),
-                tooltip=["Risk Level:N", "Students:Q", alt.Tooltip("Share:Q", format=".0%")],
-            ).properties(height=280)
-            st.altair_chart(donut, width="stretch")
-            st.caption("Share of students matching the current filters.")
+    st.subheader("Interactive Plotly Charts")
+    plotly_columns = st.columns(2)
+    colors = dict(zip(RISK_ORDER, RISK_COLORS))
+    with plotly_columns[0]:
+        if not filtered_df.empty:
+            fig_risk = px.bar(risk_summary, x="Risk Level", y="Students", color="Risk Level",
+                              title="Risk Level Distribution", color_discrete_map=colors,
+                              category_orders={"Risk Level": RISK_ORDER}, text="Students")
+            fig_risk.update_yaxes(dtick=1)
+            st.plotly_chart(fig_risk, width='stretch', key="plotly_risk")
+        else:
+            st.info("No risk distribution chart available.")
+    with plotly_columns[1]:
+        if not filtered_df.empty:
+            fig_score = px.bar(filtered_df, x="Student Name", y="Score", color="Risk Level",
+                               title="Student Scores by Risk Level", color_discrete_map=colors,
+                               category_orders={"Risk Level": RISK_ORDER},
+                               hover_data=["Course", "Attendance", "Study Hours"])
+            fig_score.update_yaxes(range=[0,100])
+            st.plotly_chart(fig_score, width='stretch', key="plotly_scores")
+        else:
+            st.info("No score chart available.")
+
+    with st.expander("Additional Charts · Course colors and risk doughnut"):
+        if filtered_df.empty:
+            st.info("No students match these filters. Adjust the filters to see charts.")
+        else:
+            risk_data = risk_counts.rename_axis("Risk Level").reset_index(name="Students")
+            chart_col1, chart_col2 = st.columns(2)
+            with chart_col1:
+                st.write("Student Scores")
+                chart = alt.Chart(filtered_df).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                    x=alt.X("Student Name:N", sort=None, axis=alt.Axis(labelAngle=-35)),
+                    y=alt.Y("Score:Q", scale=alt.Scale(domain=[0, 100])),
+                    color=risk_color(),
+                    tooltip=["Student Name:N", "Course:N", "Score:Q", "Attendance:Q", "Risk Level:N"],
+                ).properties(height=280)
+                st.altair_chart(chart, width="stretch")
+            with chart_col2:
+                st.write("Risk Level Count")
+                chart = alt.Chart(risk_data).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                    x=alt.X("Risk Level:N", sort=RISK_ORDER, axis=alt.Axis(labelAngle=0)),
+                    y=alt.Y("Students:Q", axis=alt.Axis(tickMinStep=1)),
+                    color=risk_color(), tooltip=["Risk Level:N", "Students:Q"],
+                ).properties(height=280)
+                st.altair_chart(chart, width="stretch")
+
+            chart_col3, chart_col4 = st.columns(2)
+            with chart_col3:
+                st.write("Course Count")
+                course_data = filtered_df["Course"].value_counts().rename_axis("Course").reset_index(name="Students")
+                chart = alt.Chart(course_data).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                    x=alt.X("Course:N", sort="-y", axis=alt.Axis(labelAngle=-25)),
+                    y=alt.Y("Students:Q", axis=alt.Axis(tickMinStep=1)),
+                    color=alt.Color("Course:N", scale=alt.Scale(
+                        domain=["Python", "Statistics", "Database", "Web App"],
+                        range=["#4776E6", "#9570D8", "#23A5A0", "#E39848"]), legend=None),
+                    tooltip=["Course:N", "Students:Q"],
+                ).properties(height=280)
+                st.altair_chart(chart, width="stretch")
+            with chart_col4:
+                st.write("Risk Distribution")
+                pie_data = risk_data[risk_data["Students"] > 0].copy()
+                pie_data["Share"] = pie_data["Students"] / len(filtered_df)
+                donut = alt.Chart(pie_data).mark_arc(innerRadius=65, cornerRadius=4).encode(
+                    theta=alt.Theta("Students:Q", stack=True), color=risk_color(),
+                    order=alt.Order("Risk Level:N", sort="ascending"),
+                    tooltip=["Risk Level:N", "Students:Q", alt.Tooltip("Share:Q", format=".0%")],
+                ).properties(height=280)
+                st.altair_chart(donut, width="stretch")
+                st.caption("Share of students matching the current filters.")
 
     st.info(
-        "Ethics Reminder: Academic monitoring should support students, "
+        "Ethics Reminder: Visualizations should support students and guide academic support decisions, "
         "not label or punish them."
     )
 
@@ -433,17 +484,17 @@ elif selected_page == "Risk Checker":
 else:
     st.title("About")
 
-    st.write("This app is part of Lab 04.")
+    st.write("This app is part of Lab 05.")
     st.write("Course: Web App Development for Data Science")
     st.write("Project Theme: EduRisk Analytics")
-    st.write("Topic: Forms, Validation, and Session State")
+    st.write("Topic: Visualization and Interactivity")
 
     st.info(
-        "This version improves the Risk Checker page using Streamlit forms, "
-        "input validation, and session state."
+        "This version improves the Dashboard page using grouped summaries, "
+        "interactive filters, Streamlit charts, and Plotly charts."
     )
 
     st.warning(
-        "Ethics Reminder: Student risk information should be used responsibly "
-        "to support learning and student success."
+        "Ethics Reminder: Student performance visualizations should be used "
+        "responsibly to support learning and student success."
     )

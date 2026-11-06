@@ -1,8 +1,33 @@
-# Lab 04: Forms, Validation, and Session State
+# Lab 05: Visualization and Interactivity
 
 ## Project Theme
 
 EduRisk Analytics
+
+## Lab 05 Additions
+
+This version continues the customized app from Labs 01–04.
+- Course, risk, attendance, and minimum-score filters update every dashboard result.
+- Filtered colored metric cards and student records with CSV download.
+- Course Summary uses groupby with student count and average score, attendance, and study hours.
+- Risk Level Summary uses value_counts and retains risk colors.
+- Streamlit bar charts for student scores and students by course.
+- Plotly charts for risk distribution and scores by risk, with hover details and chart controls.
+- Existing colored Altair charts and risk doughnut are retained in Additional Charts.
+- Empty results show a warning, zero metrics, and explanatory messages.
+- The drawer menu, Student Data cards, data inspection, validated Risk Checker,
+  temporary history, immediate history clearing, welcome button, and ethics reminders remain.
+
+## Lab 05 Checks
+
+1. With all filters reset: 8 students, score 71.62, attendance 79.0%, High Risk 2.
+2. Filter Course to Python: 3 students, score 67.33, attendance 73.33, study hours 8.00.
+3. Filter High Risk: all displayed records must have High Risk.
+4. Minimum Attendance 80: only attendance >= 80 remains.
+5. High Risk plus attendance 100: warning, zero metrics, no chart crash.
+6. Check both summary tables, Streamlit charts, Plotly hover values, and filtered CSV.
+7. Submit valid and blank names in Risk Checker; history accepts only valid submissions.
+8. Navigate away and back, then Clear History; students.csv stays unchanged.
 
 ## Visual Update
 
@@ -143,6 +168,6 @@ The loaded table has 6 columns including the calculated Risk Level column.
 ## Submission
 
 Submit only app.py, students.csv, requirements.txt, and README.md.
-The ZIP is named soeun_sereisontik_lab04.zip because no student ID was provided.
-Before submitting, add your student ID and class above and rename the ZIP to yourstudentid_soeun_sereisontik_lab04.zip.
+The ZIP is named soeun_sereisontik_lab05.zip because no student ID was provided.
+Before submitting, add your student ID and class above and rename the ZIP to yourstudentid_soeun_sereisontik_lab05.zip.
 Exclude .venv, __pycache__, and filtered_student_data.csv.
